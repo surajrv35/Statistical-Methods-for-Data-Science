@@ -1,0 +1,305 @@
+---
+title: "Project1"
+author: "Suraj (srv180000)"
+date: "October 3, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Introduction
+
+  Ethereum was invented in 2015 to provide SmartContracts and Distributed Applications (Dapps) functionality on a decentralized software platform. These functions are self-executing software written in programming language across distributed, decentralized blockchain network.   These functions are built and run without any downtime, fraud, control or interference from a third party. It allows trading or sharing digital assets called crypto-tokens/virtual currency. Ethereum is not just a platform but also a programming language (Turing complete) running on a blockchain, helping developers to build and publish distributed applications. The potential applications of Ethereum are wide ranging.
+  
+  The tokens have a associated dollar value which  are displayed on online websites like CoinMarketCap.com. Since the token supply is fixed the value varies on demand. These tokens are just online entities they don't have any intrinsic meaning. For example , the Crypto Kitties token are used to purchase, collect, breed and sell various types of virtual cats. ERC20-Ethereum Request for Comments 20 tokens are standard set of protocols which describes functions and events that the Ethereum tokens have to follow. Ex: totalSupply(), is a common rule implemented by all the ethereum tokens. The transactions are created when the addresses(buyer/seller) transfers the tokens over the network. 
+
+
+##Data Description
+
+  Data files (Ethereum datasets--ZRX token) contains two files: token network edge files, and token price files.\n 
+
+  Token edge files have this row structure: fromNodeID, toNodeID, unixTime, tokenAmount \n
+Token price files have this row structure:Date, Open, High, Low, Close, Volume, Marketcap \n
+This row implies that fromNodeID sold tokenAmount of the token to toNodeID at time unixTime. fromNodeID and toNodeID are people who invest in the token in real life; each investor can also use multiple addresses. Two addresses can sell/buy tokens multiple times with multiple amounts. 
+This row implies Opening price, Closing price, max price, min price of tokenAmount at particular day Date. Volume and MarketCap give total bought/sold tokens and market valuation at the date
+
+
+##Primary Token
+
+Our primary token is ZRX. ZRX token is used to pay the trading fees for Relayers for their services, and as a means for network members to decide on proposals for the development of protocols.
+
+###Procedure for question 1:
+
+
+
+**Preprocessing Step**:
+
+  Once the data set file is loaded, the data has to be preprocessed to remove the outliers if they exist. Our token, **ZRX**, has the information on the following link:  
+"https://etherscan.io/token/0xe41d2489571d322189246dafa5ebde1f4699f498"
+We can get the values for total supply and Decimals from the above site.
+These extreme outliers are removed from data set based on the tokenAmount exceeding the totalsupply*decimals value.    
+
+```{r}
+
+data <- read.csv("networkzrxTX.txt", sep=" ")
+colnames(data) <- c("SellerId", "BuyerId", "UnixTime", "Amount")
+
+totalSupply <- 10^9
+Decimals <- 10^18
+Tokens <- totalSupply*Decimals
+
+outliers <- data[data$Amount>Tokens, ]
+CleanData <- data[data$Amount<Tokens,]
+```
+
+
+**Getting Buyers and Sellers :**
+ 
+ For the 1st question we first Extracted the Buyers and Sellers from the Token Data, which were the 1st and 2nd columns.
+ 
+```{r}
+Seller <- c(CleanData[,1])
+Buyer <- c(CleanData[,2])
+library(ggplot2)
+library(fitdistrplus)
+
+```
+
+
+**Setting the frequency for Buyers :**
+
+Now, we take the frequency of buyers/sellers, giving us the total number of transactions per user. We again took the frequency of this, giving the total users per Transaction, eg- no. of users for 1 transaction is 5000, similar for 2 we get 2000, and so on. 
+We are using the Library of ggplot2, fitdistrplus, and Functions are barplot(), descdist(), fitdistrplus(), plot().
+
+
+```{r}
+FirstFreq <- as.data.frame(table(Seller))
+colnames(FirstFreq) <- c("ID","Frequency")
+
+FrequencySeller <- as.data.frame(table(FirstFreq$Frequency))
+colnames(FrequencySeller) <- c("Requests", "Users") 
+
+users <- c(FrequencySeller[,2])
+Reques <- c(FrequencySeller[,1])
+
+#exp.model <- lm(log(c(FrequencyBuyers$Requests)) ~ c(FrequencyBuyers$Users ))
+#plot(exp.model)
+Dist.norm<-fitdist(FrequencySeller[,2],distr = "norm")
+Dist.pois<-fitdist(FrequencySeller[,2], distr="pois")
+```
+
+#Distribution for Seller:
+
+```{r}
+barplot(FrequencySeller[,2] ,las=2, xlab="Requests", ylab="Users", xlim=c(1,26), col="blue")
+```
+
+##The cullen and Frey graph for Sellers is:
+
+```{r}
+descdist(FrequencySeller[,2], discrete = TRUE)
+plot(Dist.pois)
+```
+
+
+##Distribution for Buyer:
+
+We did the same process for the seller data and found the distribution which looks like:
+
+```{r}
+FirstFreq <- as.data.frame(table(Buyer))
+colnames(FirstFreq) <- c("ID","Frequency")
+FrequencyBuyers <- as.data.frame(table(FirstFreq$Frequency))
+colnames(FrequencyBuyers) <- c("Requests", "Users") 
+barplot(FrequencyBuyers[,2] ,las=2, xlab="Requests", ylab="Users", xlim=c(1,26), col="magenta")
+
+
+users <- c(FrequencyBuyers[,2])
+Reques <- c(FrequencyBuyers[,1])
+
+```
+
+```{r}
+descdist(FrequencyBuyers[,2], discrete = TRUE)
+Dist.norm<-fitdist(FrequencyBuyers[,2],distr = "norm")
+Dist.norm
+Dist.pois<-fitdist(FrequencyBuyers[,2], distr="pois")
+Dist.pois
+plot(Dist.pois)
+```
+
+
+```{r}
+barplot(FrequencyBuyers[,2] ,las=2, xlab="Requests", ylab="Users", xlim=c(1,26), col="magenta")
+```
+
+##The cullen and frey distribution for Buyers is:
+
+```{r}
+descdist(FrequencyBuyers[,2], discrete = TRUE)
+plot(Dist.pois)
+```
+
+##What we found
+
+We applied the fitdistr() to the data and cullen graph to find out that the plot is a poisson distribution. 
+
+
+##Conclusion:
+  
+  Found the distribution type that best fits the number of transactions in buying and selling over their respective IDs along with the distribution parameters being estimated.
+Poisson distribution could fit the best on this data. The results were based on Cullen graph and distribution parameters.
+
+**Importance**:
+
+  We can find the max Transaction of the users.
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+###Procedure for question 2:
+
+##Description:
+In this question we have to find the correlation between two of the attributes of the token edge file and the Price_data file for the similar day.
+We first calculate the transactions taking place on each day, then we find out the Low price of the token for these similar days and then we figure out if theres any correlation between these two attributes.
+
+
+```{r, include=FALSE}
+ library(anytime)
+```
+
+**Preprocessing :**
+
+1. Time Conversion:
+We first convert the Date column in our zrx token data, as it is in Unix time format.
+Then we read the ZRX token Price data and convert its date format (eg.from dd/mm/yyyy to mm/dd/yyyy).
+
+```{r}
+CleanData[,3] <- as.Date(as.POSIXct(CleanData[,3],origin="1970-01-01"))
+
+PriceData <- read.csv("zrx.txt", sep="", header = FALSE)
+colnames(PriceData) <- c("Date", "Open", "High", "Low", "Close",	"Volume",	"Market Cap")
+PriceData[,1]<-as.Date(PriceData[,1], format="%m/%d/%Y")
+
+```
+
+2. Removing the impossible outliers:
+
+Impossible outliers are those data points that lie abnormal distance away from all of the other values in a sample, which has to be removed since they skew the calculations and cause invalid statistical analysis.
+We removed the Max amounts which act as impossible outliers  
+
+
+```{r}
+
+#removing the impossible outliers :
+CleanData <- CleanData[CleanData$Amount<(1e+25),]
+UTime <-CleanData[( c(3,4) )]
+MaxAmount<-max(CleanData[,4])
+```
+
+3. Setting the Layers:
+
+Now, we set the layer's upper bounds and lower bounds as we have to calculate the correlation for different layers
+
+```{r}
+
+#Now we give 2 layer bounds, i.e Limits for How much values can a layer have (Upper bound and LowerBound)
+
+ LayerLower <- c(9.577577e+22, 1.915515e+23, 3.873273e+23, 5.831031e+23, 7.788789e+23, 8.746546e+23,9.704304e+23, 7.662062e+23, 8.619819e+23, 9.577577e+23, 1.053533e+24, 1.149309e+24
+,1.245085e+24, 1.436637e+24, 1.915515e+24, 2.107067e+24)
+
+ LayerUpper <- c(1.915515e+23, 3.873273e+23, 5.831031e+23, 7.788789e+23, 8.746546e+23, 9.704304e+23, 1.662062e+24, 8.619819e+23, 9.577577e+23, 1.053533e+24, 1.149309e+24, 1.245085e+24,
+1.340861e+24, 1.532412e+24, 2.011291e+24, 2.202843e+24)
+
+```
+
+
+**Finding the correlation :**
+
+Now, we remove the correlation between  
+
+1. the LOW_PRICE of the Tokens on a specific Date &
+2. Transactions on the same date
+
+  Here, we take the layers and extract the Date and Amount on the specific date from the zrx Token data set so we can calculate the transaction per day for that layer.
+  
+  Now we combine the 2 columns i.e. Date and Transaction's frequency, from Token data file, with the Date and LowPrice of the Price Data file, keeping the Date column same(We used SQL query for this). So the final DataFrame would contain 3 columns: Date, Transactions, LowPrice.
+  
+  Further we compute Correlation with the **Cor()** function with the method as spearman.  
+
+
+```{r}
+library(sqldf)
+library(ggplot2)
+library(fitdistrplus)
+
+layerCount<-1
+
+while(layerCount<=length(LayerUpper)){
+
+ #Taking in the Layers, by specifying lower n upper limits:      
+ 
+  Data<-UTime[UTime[,2]>=LayerLower[layerCount] ,]
+ Data<-Data[Data[,2]<=LayerUpper[layerCount],]
+ colnames(Data)<-c("Date","Amount")
+
+ 
+ #Finding the number of Transactions:
+ 
+ FirstFreq <- as.data.frame(table(Data$Date))
+ colnames(FirstFreq) <- c("Date","Frequency")
+ FirstFreq[,1]<-as.Date(FirstFreq[,1])
+ PriceData[,1]<-as.Date(PriceData[,1])
+ Transactions <-FirstFreq[,2]
+ 
+ #Making a dataframe which has 3 columns: Date, Number of Transactions, Low__Price   
+ 
+ df3<-sqldf("SELECT p.Date,  p.Frequency, f.Low from  FirstFreq p INNER JOIN PriceData f WHERE  p.Date=f.Date")
+
+ #Computing the correlation:
+ 
+ 
+ Correlation<- cor(df3[,2],df3[,3], method = "spearman")
+ print("Correlation and the LAYER NUMBER:")
+ print(c(Correlation,layerCount))
+ 
+
+  layerCount<-layerCount+1
+}
+```
+
+  So, we have the Maximum correlation, using "spearman" method, for the layer 16 i.e 0.8660254. We can get different correlation values using different methods , for EX. we get 0.9886281 as Max correlation value for the "pearson" method. Now we can plot these values:
+
+
+
+##Plotting the Transaction and LowPrice:
+
+  Now we plot the transactions and the LowPrice for the same dates for which we got the max correlation i.e. for the layer 16.
+  
+**Plot for Number of Transactions on a specific Date:**
+
+```{r}
+plot(density(Transactions))
+```
+
+**Plot for Lowest Value of a token on that Date:**  
+
+```{r}
+plot(density(df3[,3]))
+```
+
+
+##What we found:
+
+  We can see for the highest correlation value the density plots are almost same.    
+
+##Conclusion:
+  
+  Found the correlation between the number of transactions on a day and Low token value on the same day. Got a correaltion of 0.86 for spearman method of cor() function.
+
+**Importance**:
+  
+  Finding the correlation between the number of transactions on a day and Low token value on the same day can give us the user behaviour, and we can predict the next number of transactions based on the low price of that token.  

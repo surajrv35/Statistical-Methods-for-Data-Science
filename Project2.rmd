@@ -1,0 +1,189 @@
+---
+title: "Project2"
+author: "Suraj (srv180000)"
+date: "November 26, 2018"
+output: 
+  html_document: default
+---
+# Project Question 2
+In this project, we start with extracting the useful features from the data set(feature engineering) and model them using multiple linear regression along with explaining our findings and residuals.
+
+```{r setup, include=FALSE}
+
+rawdata<- read.csv(file="zrx.txt",sep="",header = FALSE, stringsAsFactors = FALSE)
+colnames(rawdata) <- c("Date", "Open", "High", "Low", "Close",	"Volume",	"Market Cap")
+#rawdata
+
+```
+
+##preprocessing: 
+for Market cap column, removing all the "," from the numbers, so i can convert it into double
+
+```{r}
+rawdata[,7]<-gsub(",","",rawdata$`Market Cap`)
+rawdata[,6]<- gsub(",","",rawdata$Volume)
+rawdata[,6]<-as.double(rawdata[,6])
+rawdata[,1]<-as.Date(as.factor(rawdata[,1]), format="%m/%d/%Y")
+#rawdata
+```
+
+#Calculate the Y column
+where we have taken simple price formulae: 
+$Pt=Pt-Pt-1/Pt-1$
+Were Pt  High price at day t
+
+```{r}
+abc <- c(rawdata$High)
+y=NULL
+Demo=NULL
+count=0
+
+for (i in 2:nrow(rawdata)){
+  a<- (abc[i])
+  #print(i)
+  b<- (abc[i-1])
+  y<- c(y,((a-b)/b))
+  Demo <- rbind(Demo,data.frame(rawdata[i,1],rawdata[i-1,2],rawdata[i,3],rawdata[i,4],rawdata[i-1,5],rawdata[i-1,6],rawdata[i-1,7]))
+}
+y<-as.data.frame(y)
+colnames(Demo)<-c("Date", "Open", "High", "Low", "Close",	"Volume",	"Market Cap")
+DataFrame<-cbind(Demo,y)
+#y
+```
+
+DataFrame is merged columns: y and date: (I did this so that i can take X1 as number of transactions on a particular day )
+Taking x1 as number of transactions, x2 as Open price of token on the previous day, x3 as Volume on the previous day.  
+(P.S : After finding that Volume is a bad regresson(shown below), We finally took the regressors as Transactions, Percent of Unique buyers, and Volume of previous day)
+
+##Preprocessing for file 2:
+
+reading 1st file to compute number of transactions on a day: and removing the outliers
+
+```{r}
+data <- read.csv("networkzrxTX.txt", sep=" ")
+colnames(data) <- c("SellerId", "BuyerId", "UnixTime", "Amount")
+totalSupply <- 10^9
+Decimals <- 10^18
+library(anytime)
+Tokens <- totalSupply*Decimals
+outliers <- data[data$Amount>Tokens, ]
+CleanData <- data[data$Amount<Tokens,]
+CleanData[,3] <- as.Date(as.POSIXct(CleanData[,3],origin="1970-01-01"))
+```
+
+Now extract the transactions feature from our token Data and add it to our DataFrame. 
+
+```{r}
+library(sqldf)
+
+FirstFreq <- as.data.frame(table(CleanData$UnixTime))
+colnames(FirstFreq) <- c("Date","Transactions")
+FirstFreq[,1]<-as.Date(FirstFreq[,1])
+FinalData<-sqldf("SELECT p.Date,  p.Transactions, f.Low, f.High,f.Open,f.Close,f.Volume, f.y from  FirstFreq p INNER JOIN DataFrame f WHERE  p.Date=f.Date")
+
+```
+
+As the Volume Column has High numbers, we can preprocess it by taking its squareroot
+
+```{r}
+FinalData$Volume <- sqrt(FinalData$Volume)
+```
+
+now, since we have the final data with x1 as Transactions(i.e transactions), x2 as Open , and x3 as Volume value we would like to find the impossible outliers and remove them.
+
+Removing Impossible outliers:
+```{r}
+FinalData <- FinalData[FinalData$Transactions<3000,]
+FinalData <- FinalData[FinalData$Volume<10000,]
+FinalData <- FinalData[FinalData$y<0.3,]
+```
+As we have removed the outliers, we now need to check if we have taken good values for x1,x2,x3. How do we know weather they are good ??
+
+We can find the Correlation between each attribute. usually high correlation means that there can be a problem of Multi-colinearity. 
+```{r}
+cor(FinalData$Transactions,FinalData$y, method = "pearson")
+cor(FinalData$Volume,FinalData$y, method = "pearson")
+cor(FinalData$Open,FinalData$y, method = "pearson")
+cor(FinalData$Transactions,FinalData$Open, method = "pearson")
+cor(FinalData$Volume,FinalData$Open, method = "pearson")
+cor(FinalData$Volume,FinalData$Transactions, method = "pearson")
+```
+ As we can see, there is a high correlation between the Open regressor and the Other regressors. And Also there is very less correlation between Open and The y column. Hence we need to take another regressor parameter instead of Open.
+
+Lets try it with percentage of unique buyers in a day. 
+
+```{r}
+uniqueBuyers <- sqldf("SELECT p.Date, p.Transactions, f.BuyerId from FirstFreq p INNER JOIN CleanData f WHERE p.Date = f.UnixTime")
+
+UBuyers<- sqldf("SELECT count(distinct(BuyerId)),Date from uniqueBuyers group by Date")
+colnames(UBuyers)<-c("UniqueBuyers","Date")
+
+FinalData<-sqldf("SELECT p.Date,  p.Transactions,f.UniqueBuyers, p.Low, p.High,p.Open,p.Close,p.Volume, p.y from  FinalData p INNER JOIN UBuyers f WHERE  p.Date=f.Date")
+
+FinalData$UniqueBuyers <- ((FinalData$UniqueBuyers/FinalData$Transactions)*100)
+```
+
+Now Lets check the correlation between all attributes as we updated the Open attribute with percentage of unique buyers on same day:
+
+```{r}
+cor(FinalData$Transactions,FinalData$y, method = "pearson")
+cor(FinalData$y,FinalData$UniqueBuyers, method = "pearson")
+cor(FinalData$Volume,FinalData$y, method = "pearson")
+cor(FinalData$Transactions,FinalData$Volume, method = "pearson")
+cor(FinalData$Transactions,FinalData$UniqueBuyers, method = "pearson")
+cor(FinalData$Volume,FinalData$UniqueBuyers, method = "pearson")
+```
+
+Now that there is a bit less coorelation between the attributes and the predictor, we can say that we have chosen good values for x1, x2, x3.
+
+###x1 = Number of transactions
+###x2 = Volume of the previous date/Day
+###x3 = percentage of unique buyers on same day
+
+now lets see the scatter plot for our regressors:
+
+```{r}
+scatter.smooth(x=FinalData$Transactions, y=FinalData$y, main="x ~ y")  # scatterplot
+scatter.smooth(x=FinalData$Volume, y=FinalData$y, main="x ~ y")  # scatterplot
+scatter.smooth(x=FinalData$UniqueBuyers, y=FinalData$y, main="x ~ y")  # scatterplot
+```
+
+```{r}
+library(ggplot2)
+linear <- lm(y~Transactions+UniqueBuyers+Volume,data=FinalData)
+summary(linear)
+```
+
+The $R^2$ Value is 0.185 which is very less, What can we do to increase it?
+Lets try adding more regressors and check if $R^2$ is increasing.
+
+Lets Try and Add Low Cloumn as our 4th Regressor:
+
+```{r}
+library(ggplot2)
+linear <- lm(y~Transactions+UniqueBuyers+Volume+Low,data=FinalData)
+summary(linear)
+```
+
+The $R^2$ increased to 0.2417 and the P-value Decreased !
+
+We can add more number of Regressors and check if the $R^2$ increases:
+Lets try x5 as Closing Value and x6 as High Token Value
+```{r}
+library(ggplot2)
+linear <- lm(y~Transactions+UniqueBuyers+Volume+Low+High+Close,data=FinalData)
+summary(linear)
+
+```
+
+
+The $R^2$ increased !!
+
+Lets take a look at the residuals with 6 regressors:
+```{r}
+plot(linear$residuals)
+```
+
+#Conclusion:
+
+We can conclude that for the ZRX token, Adding more and more regressors will give us higher R squared values(Low error) and less p-values. Right now our Max R squared value is 0.5629 with 6 regressors, which is better than the previous one where we used just 3 regressors. In other words, For the ZRX token, we need to make our model a bit complex with more regressors to get low error. 
